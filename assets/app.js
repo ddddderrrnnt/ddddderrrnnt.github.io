@@ -55,36 +55,37 @@
 
   /* ── state helpers ── */
   var $ = function (id) { return document.getElementById(id); };
-  var loadingState = $('loadingState');
-  var emptyState   = $('emptyState');
-  var errorState   = $('errorState');
-  var readyState   = $('readyState');
 
-  function showState(el) {
-    [loadingState, emptyState, errorState, readyState].forEach(function (s) { s.hidden = s !== el; });
+  function showState(name) {
+    ['loadingState','emptyState','errorState','readyState'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.hidden = (id !== name);
+    });
   }
 
-  /* ── parse hash ── */
-  var raw = location.hash.slice(1);
-  if (!raw) { showState(emptyState); return; }
+  /* ── parse hash — runs synchronously, no async ── */
+  var raw = (location.hash || '').slice(1);
+
+  /* No hash → keep emptyState visible (it's the default) */
+  if (!raw) { return; }
 
   var isNewFormat = /^[0-9a-f]{24}$/i.test(raw);
 
   /* ── OLD FORMAT (base64 vless) — decode and show immediately ── */
   if (!isNewFormat) {
     var decoded = b64urlDecode(raw);
-    if (!decoded || decoded.indexOf('vless://') !== 0) { showState(errorState); return; }
+    if (!decoded || decoded.indexOf('vless://') !== 0) { showState('errorState'); return; }
     showReadyImmediate(decoded, '', false, null);
     return;
   }
 
-  /* ── NEW FORMAT — show skeleton UI right away, fill in data as it arrives ── */
+  /* ── NEW FORMAT — show UI immediately, data loads in background ── */
   var userHash = raw.toLowerCase();
   var subUrl   = GITHUB_RAW + userHash + '.txt';
   var infoUrl  = GITHUB_RAW + userHash + '.json';
 
-  /* Show UI skeleton immediately — no waiting */
-  showState(readyState);
+  /* Show full UI immediately — no spinner, no waiting */
+  showState('readyState');
   setupIabBanner(detectTelegramIAB(), detectInstagramOrFB(), detectPlatform());
 
   /* Render app grid with placeholder sub URL so buttons appear right away */
@@ -148,7 +149,7 @@
 
   /* ── old format: decode everything before showing ── */
   function showReadyImmediate(firstVless, sub, isSub, info) {
-    showState(readyState);
+    showState('readyState');
     var username = extractUsername(firstVless);
     renderSubCard(username, info);
     setupIabBanner(detectTelegramIAB(), detectInstagramOrFB(), detectPlatform());

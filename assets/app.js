@@ -27,13 +27,14 @@
     return 'desktop';
   }
   function detectTelegramIAB() {
+    // TelegramWebviewProxy is injected ONLY into Telegram's native in-app browser.
+    // It is NOT present in Safari or Chrome, even when opened from Telegram.
+    // window.Telegram.WebApp is NOT a reliable signal — telegram-web-app.js sets it
+    // on every page load regardless of context.
+    if (typeof window.TelegramWebviewProxy !== 'undefined') return true;
+    // Fallback: Telegram injects its name into the UA only in its own WebView
     var ua = navigator.userAgent || '';
-    return (
-      /Telegram/i.test(ua) ||
-      typeof window.TelegramWebviewProxy !== 'undefined' ||
-      !!(window.Telegram && window.Telegram.WebView) ||
-      !!(window.Telegram && window.Telegram.WebApp)
-    );
+    return /Telegram\/\d/i.test(ua);
   }
   function detectInstagramOrFB() {
     return /Instagram|FBAN|FBAV/i.test(navigator.userAgent || '');
@@ -163,13 +164,6 @@
     document.body.setAttribute('data-platform', platform);
     if (isTgIAB) document.body.setAttribute('data-tg-iab', '1');
 
-    // Telegram WebApp ready
-    try {
-      if (window.Telegram && window.Telegram.WebApp) {
-        window.Telegram.WebApp.ready();
-        try { window.Telegram.WebApp.expand(); } catch (e) {}
-      }
-    } catch (e) {}
 
     // IAB banner
     setupIabBanner(isTgIAB, isIgIAB, platform);
@@ -197,14 +191,7 @@
       howToOpen + ', потом жми «Импортировать». Или скопируй ссылку на эту страницу ↓';
 
     iabOpenBtn.addEventListener('click', function () {
-      var url = location.href;
-      try {
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-          window.Telegram.WebApp.openLink(url, { try_instant_view: false });
-          return;
-        }
-      } catch (e) {}
-      window.open(url, '_blank', 'noopener');
+      window.open(location.href, '_blank', 'noopener');
     });
 
     iabCopyBtn.addEventListener('click', function () {

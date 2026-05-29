@@ -3,150 +3,165 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a0f0d">
+<meta name="theme-color" content="#000000">
 <meta name="robots" content="noindex, nofollow">
-<title>toncaid VPN · подключение</title>
+<title>toncaid VPN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
 
-<div class="grain"></div>
-<div class="glow glow-a"></div>
-<div class="glow glow-b"></div>
+<div id="bg-grid"></div>
+<div id="bg-glow"></div>
 
-<main class="wrap" id="appRoot">
+<main id="app">
 
-  <!-- ====== EMPTY STATE (нет hash) ====== -->
-  <section class="empty" id="emptyState" hidden>
-    <div class="brand">
-      <div class="brand-dot"></div>
-      <span class="brand-name">toncaid<span class="brand-accent">/VPN</span></span>
-    </div>
-    <h1 class="empty-title">Эта страница персональная</h1>
-    <p class="empty-text">
-      Сюда попадают по личной ссылке из Telegram-бота <a href="https://t.me/toncaidVPN_bot" class="lnk">@toncaidVPN_bot</a>
-      после одобрения заявки администратором.
-    </p>
-    <a href="https://t.me/toncaidVPN_bot" class="btn btn-primary" data-testid="bot-link-btn">
-      <span>Открыть бота в Telegram</span>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  <!-- LOADING -->
+  <div id="loadingState" class="state-center">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- EMPTY -->
+  <div id="emptyState" class="state-center" hidden>
+    <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
+    <h1 class="empty-title">Персональная страница</h1>
+    <p class="empty-desc">Ссылка выдаётся в боте после одобрения заявки.</p>
+    <a href="https://t.me/toncaidVPN_bot" class="btn-primary">
+      Открыть бота
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
-  </section>
+  </div>
 
-  <!-- ====== READY STATE (с hash) ====== -->
-  <section class="ready" id="readyState" hidden>
+  <!-- ERROR -->
+  <div id="errorState" class="state-center" hidden>
+    <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
+    <h1 class="empty-title">Ссылка не найдена</h1>
+    <p class="empty-desc">Открой ссылку из Telegram-бота заново.</p>
+    <a href="https://t.me/toncaidVPN_bot" class="btn-primary">Перейти в бот</a>
+  </div>
 
-    <header class="hdr">
-      <div class="brand">
-        <div class="brand-dot"></div>
-        <span class="brand-name">toncaid<span class="brand-accent">/VPN</span></span>
-      </div>
-      <div class="status">
-        <span class="status-dot"></span>
-        <span>ключ готов</span>
-      </div>
+  <!-- READY -->
+  <div id="readyState" hidden>
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
+      <a href="https://t.me/toncaidVPN_bot" class="header-tg" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.41 13.948l-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.74.611z"/></svg>
+        @toncaidVPN_bot
+      </a>
     </header>
 
-    <div class="hero">
-      <div class="hero-eyebrow">персональное подключение</div>
-      <h1 class="hero-title">
-        Привет, <span class="hero-name" id="userName">друг</span>.
-        <br>Твой VPN ждёт.
-      </h1>
-      <p class="hero-sub">
-        Выбери своё VPN-приложение — ключ улетит туда одним тапом.
-      </p>
-    </div>
-
-    <!-- IAB BANNER (Telegram / Instagram in-app browser warning) -->
-    <div id="iabBanner" class="iab-banner" hidden data-testid="iab-banner">
-      <div class="iab-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-      </div>
+    <!-- IAB WARNING -->
+    <div id="iabBanner" class="iab-banner" hidden>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
       <div class="iab-body">
-        <div class="iab-text" id="iabBannerText"></div>
+        <div id="iabText" class="iab-text"></div>
         <div class="iab-actions">
-          <button class="iab-btn iab-btn-primary" id="iabOpenBtn" data-testid="iab-open-external">Открыть во внешнем браузере</button>
-          <button class="iab-btn" id="iabCopyBtn" data-testid="iab-copy-url">Скопировать ссылку</button>
+          <button id="iabOpenBtn" class="iab-btn-primary">Открыть во внешнем браузере</button>
+          <button id="iabCopyBtn" class="iab-btn">Скопировать ссылку</button>
         </div>
       </div>
     </div>
 
-    <!-- APP CHOOSER -->
-    <div class="chooser" data-testid="app-chooser">
-      <div class="chooser-head">
-        <div class="chooser-title">
-          <span class="block-num">1</span>
-          Импортировать в приложение
-        </div>
-        <div class="chooser-sub">Выбери своё VPN-приложение — ключ откроется в нём автоматически</div>
+    <!-- SUBSCRIPTION CARD -->
+    <div class="sub-card" id="subCard">
+      <div class="sub-card-left">
+        <div class="sub-greeting">Привет, <span id="userName" class="sub-username">—</span></div>
+        <div class="sub-type" id="subType">Загрузка…</div>
+        <div class="sub-expires" id="subExpires"></div>
       </div>
-      <div class="chooser-grid" id="chooserGrid"></div>
-      <div id="fallbackHint" class="fb" hidden data-testid="fallback-hint"></div>
+      <div class="sub-card-right">
+        <div class="days-ring" id="daysRing">
+          <svg class="ring-svg" viewBox="0 0 64 64">
+            <circle class="ring-bg" cx="32" cy="32" r="27" fill="none" stroke-width="5"/>
+            <circle class="ring-fg" id="ringFg" cx="32" cy="32" r="27" fill="none" stroke-width="5"
+              stroke-dasharray="169.6" stroke-dashoffset="169.6" stroke-linecap="round"
+              transform="rotate(-90 32 32)"/>
+          </svg>
+          <div class="days-count">
+            <span id="daysNum">—</span>
+            <span class="days-label">дн.</span>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- QR -->
-    <div class="qr-card">
+    <!-- IMPORT SECTION -->
+    <section class="section">
+      <div class="section-header">
+        <div class="section-num">01</div>
+        <div>
+          <div class="section-title">Импорт в приложение</div>
+          <div class="section-sub">Выбери приложение — ключ добавится автоматически</div>
+        </div>
+      </div>
+      <div id="appGrid" class="app-grid"></div>
+      <div id="fallbackHint" class="fallback" hidden></div>
+    </section>
+
+    <!-- QR SECTION -->
+    <section class="section">
+      <div class="section-header">
+        <div class="section-num">02</div>
+        <div>
+          <div class="section-title">QR‑код</div>
+          <div class="section-sub">Отсканируй с другого устройства</div>
+        </div>
+      </div>
       <div class="qr-wrap">
-        <div id="qrcode" class="qr"></div>
+        <div id="qrcode" class="qr-box"></div>
+        <div class="qr-hint">Открой VPN-приложение → «Добавить из QR» → наведи камеру</div>
       </div>
-      <div class="qr-info">
-        <div class="qr-title"><span class="block-num">2</span> QR-код (для другого устройства)</div>
-        <div class="qr-text">Открой VPN-приложение на телефоне → «Добавить из QR» → наведи камеру.</div>
+    </section>
+
+    <!-- COPY SECTION -->
+    <section class="section">
+      <div class="section-header">
+        <div class="section-num">03</div>
+        <div>
+          <div class="section-title">Ссылка подписки</div>
+          <div class="section-sub">Для ручного добавления в приложение</div>
+        </div>
       </div>
-    </div>
+      <div class="copy-wrap">
+        <code id="subUrlText" class="copy-code">—</code>
+        <button id="copyBtn" class="copy-btn" title="Скопировать">
+          <svg id="copyIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+        </button>
+      </div>
+    </section>
 
-    <!-- COPY -->
-    <div class="copy-card">
-      <div class="copy-label"><span class="block-num">3</span> VLESS-ключ (ручной импорт)</div>
-      <code id="vlessText" class="copy-code">vless://...</code>
-      <button id="copyBtn" class="btn btn-ghost" data-testid="copy-key-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-        <span id="copyBtnText">Скопировать ключ</span>
-      </button>
-    </div>
-
-    <!-- STEPS -->
-    <div class="steps">
-      <div class="block-title">Если приложение не открывается</div>
-      <ol class="steps-list">
-        <li><b>Установи приложение</b> — у каждой карточки выше есть кнопка «Установить».</li>
-        <li>Если ты в <b>Telegram-браузере</b> → нажми <b>⋯</b> (или <b>⋮</b>) → <b>«Открыть в Safari/Chrome»</b>, потом снова выбери приложение.</li>
-        <li>В крайнем случае — <b>скопируй ключ</b> (выше) и добавь его в приложении вручную через «Импорт из буфера».</li>
+    <!-- HELP -->
+    <section class="section">
+      <div class="section-header">
+        <div class="section-num">?</div>
+        <div>
+          <div class="section-title">Не работает импорт?</div>
+        </div>
+      </div>
+      <ol class="help-list">
+        <li>Убедись что приложение <strong>установлено</strong> — у каждой карточки есть кнопка «Установить»</li>
+        <li>Если открываешь из <strong>Telegram</strong> → нажми <strong>⋯ → Открыть в Safari/Chrome</strong></li>
+        <li>Скопируй ссылку подписки выше и добавь в приложении вручную через <strong>«Импорт из буфера»</strong></li>
       </ol>
-    </div>
+    </section>
 
-    <footer class="ftr">
-      <div class="ftr-logo">
-        <div class="brand-dot"></div>
-        toncaid<span class="brand-accent">/VPN</span>
-      </div>
-      <div class="ftr-links">
-        <a href="https://t.me/toncaid" target="_blank" rel="noopener">админ · @toncaid</a>
+    <footer class="footer">
+      <div class="logo" style="font-size:14px">toncaid<span class="logo-slash">/</span>VPN</div>
+      <div class="footer-links">
+        <a href="https://t.me/toncaid" target="_blank" rel="noopener">@toncaid</a>
+        <span class="footer-dot">·</span>
         <a href="https://t.me/toncaidVPN_bot" target="_blank" rel="noopener">бот</a>
       </div>
     </footer>
 
-  </section>
-
-  <!-- ====== ERROR STATE ====== -->
-  <section class="empty" id="errorState" hidden>
-    <div class="brand">
-      <div class="brand-dot brand-dot-err"></div>
-      <span class="brand-name">toncaid<span class="brand-accent">/VPN</span></span>
-    </div>
-    <h1 class="empty-title">Ссылка повреждена</h1>
-    <p class="empty-text">Не удалось прочитать ключ. Открой ссылку из Telegram-бота заново.</p>
-    <a href="https://t.me/toncaidVPN_bot" class="btn btn-primary">Открыть бота</a>
-  </section>
-
+  </div>
 </main>
 
-<!-- Toast -->
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/assets/app.js"></script>

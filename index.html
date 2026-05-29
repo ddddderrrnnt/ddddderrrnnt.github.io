@@ -15,13 +15,13 @@
 
 <main id="app">
 
-  <!-- LOADING -->
-  <div id="loadingState" class="state-center">
+  <!-- LOADING (hidden by default — shown only briefly via JS if needed) -->
+  <div id="loadingState" class="state-center" hidden>
     <div class="spinner"></div>
   </div>
 
-  <!-- EMPTY -->
-  <div id="emptyState" class="state-center" hidden>
+  <!-- EMPTY (shown by default so non-JS users see something) -->
+  <div id="emptyState" class="state-center">
     <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
     <h1 class="empty-title">Персональная страница</h1>
     <p class="empty-desc">Ссылка выдаётся в боте после одобрения заявки.</p>

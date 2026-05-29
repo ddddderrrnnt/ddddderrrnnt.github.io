@@ -1,502 +1,414 @@
-/* toncaid VPN — connect page logic (v3: subscription via GitHub + hash detection) */
+/* toncaid VPN — connect page v4 */
 (function () {
   'use strict';
 
-  // ---------- base64url ----------
+  var GITHUB_RAW = 'https://raw.githubusercontent.com/ddddderrrnnt/ddddderrrnnt.github.io/main/subs/';
+  var BRANDING_UUID = '00000000-0000-0000-0000-000000000000';
+
+  /* ── utils ── */
   function b64urlEncode(s) {
     var bytes = unescape(encodeURIComponent(s));
-    return btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-  }
-  function b64urlDecode(s) {
-    s = s.replace(/-/g, '+').replace(/_/g, '/');
-    while (s.length % 4) s += '=';
-    try {
-      return decodeURIComponent(
-        atob(s).split('').map(function (c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join('')
-      );
-    } catch (e) { return null; }
+    return btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
-  // ---------- platform ----------
   function detectPlatform() {
     var ua = navigator.userAgent || '';
     if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
     if (/Android/i.test(ua)) return 'android';
     return 'desktop';
   }
+
   function detectTelegramIAB() {
-    // TelegramWebviewProxy is injected ONLY into Telegram's native in-app browser.
-    // It is NOT present in Safari or Chrome, even when opened from Telegram.
-    // window.Telegram.WebApp is NOT a reliable signal — telegram-web-app.js sets it
-    // on every page load regardless of context.
     if (typeof window.TelegramWebviewProxy !== 'undefined') return true;
-    // Fallback: Telegram injects its name into the UA only in its own WebView
-    var ua = navigator.userAgent || '';
-    return /Telegram\/\d/i.test(ua);
+    return /Telegram\/\d/i.test(navigator.userAgent || '');
   }
+
   function detectInstagramOrFB() {
     return /Instagram|FBAN|FBAV/i.test(navigator.userAgent || '');
   }
 
-  // ---------- toast ----------
+  /* ── toast ── */
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
-  function toast(msg, ms) {
+  function toast(msg) {
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2400);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
   }
 
-  // ---------- parse hash ----------
-  var raw = location.hash.slice(1);
-  var emptyState = document.getElementById('emptyState');
-  var readyState = document.getElementById('readyState');
-  var errorState = document.getElementById('errorState');
-
-  if (!raw) { emptyState.hidden = false; return; }
-
-  // Detect format: 24 hex (new subscription hash) or base64(vless) (old format)
-  var isNewFormat = /^[0-9a-f]{24}$/i.test(raw);
-  var vless = '';
-  var subUrl = '';
-  var yandexUrl = '';
-
-  if (isNewFormat) {
-    // New format: user_hash (24 hex)
-    var userHash = raw.toLowerCase();
-    subUrl = 'https://raw.githubusercontent.com/ddddderrrnnt/ddddderrrnnt.github.io/main/subs/' + userHash + '.txt';
-    yandexUrl = 'https://translate.yandex.ru/translate?lang=en-ru&url=' + encodeURIComponent(subUrl);
-    
-    // We'll fetch subscription to get first vless for QR/display
-    // (GitHub raw has CORS enabled)
-    fetch(subUrl)
-      .then(function(r) { return r.text(); })
-      .then(function(text) {
-        var raw = text.trim();
-        // Support both base64-encoded subscriptions and plain-text vless:// lists
-        var decoded = raw;
-        if (raw.indexOf('vless://') === -1 && raw.indexOf('vmess://') === -1) {
-          try { decoded = atob(raw); } catch(e) { decoded = raw; }
-        }
-        var lines = decoded.split('\n').filter(function(l) { return l.trim().startsWith('vless://'); });
-        if (lines.length > 0) {
-          vless = lines[0].trim();
-          renderNewFormat(vless, subUrl, yandexUrl);
-        } else {
-          errorState.hidden = false;
-        }
-      })
-      .catch(function() {
-        errorState.hidden = false;
-      });
-  } else {
-    // Old format: base64(vless)
-    vless = b64urlDecode(raw);
-    if (!vless || vless.indexOf('vless://') !== 0) {
-      errorState.hidden = false;
-      return;
-    }
-    renderOldFormat(vless);
-  }
-
-  function renderOldFormat(vlessLink) {
-    readyState.hidden = false;
-    document.getElementById('vlessText').textContent = vlessLink;
-
-    // username from #remark
-    var nm = 'друг';
-    var hi = vlessLink.lastIndexOf('#');
-    if (hi > -1) {
+  /* ── copy ── */
+  function copyText(text, msg) {
+    var done = function () { toast(msg || 'Скопировано'); if (navigator.vibrate) navigator.vibrate(15); };
+    var fail = function () { toast('Не удалось скопировать'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done, fail); });
+    } else { fallbackCopy(text, done, fail); }
+    function fallbackCopy(t, ok, err) {
       try {
-        var tag = decodeURIComponent(vlessLink.slice(hi + 1));
-        var m = tag.match(/toncaid[-_]VPN[-_](.+)/i);
-        if (m && m[1]) nm = m[1].trim();
-      } catch (e) {}
+        var ta = document.createElement('textarea');
+        ta.value = t; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        var res = document.execCommand('copy');
+        document.body.removeChild(ta);
+        res ? ok() : err();
+      } catch (e) { err(); }
     }
-    document.getElementById('userName').textContent = nm;
-
-    setupEnv(vlessLink);
-    renderChooser(vlessLink, false);
-    renderQR(vlessLink);
-    setupCopyBtn(vlessLink);
   }
 
-  function renderNewFormat(firstVless, rawSub, yandexSub) {
-    readyState.hidden = false;
+  /* ── states ── */
+  var $ = function (id) { return document.getElementById(id); };
+  var loadingState = $('loadingState');
+  var emptyState   = $('emptyState');
+  var errorState   = $('errorState');
+  var readyState   = $('readyState');
 
-    // Extract username
-    var nm = 'друг';
+  function showState(el) {
+    [loadingState, emptyState, errorState, readyState].forEach(function (s) {
+      s.hidden = s !== el;
+    });
+  }
+
+  showState(loadingState);
+
+  /* ── parse URL ── */
+  var raw = location.hash.slice(1);
+  if (!raw) { showState(emptyState); return; }
+
+  var isNewFormat = /^[0-9a-f]{24}$/i.test(raw);
+
+  if (!isNewFormat) {
+    /* old format: base64url(vless) */
+    var decoded = b64urlDecodeOld(raw);
+    if (!decoded || decoded.indexOf('vless://') !== 0) { showState(errorState); return; }
+    initWithVless(decoded, '', false);
+  } else {
+    var userHash = raw.toLowerCase();
+    var subUrl   = GITHUB_RAW + userHash + '.txt';
+    var infoUrl  = GITHUB_RAW + userHash + '.json';
+
+    /* fetch both in parallel */
+    Promise.all([
+      fetch(subUrl).then(function (r) { return r.ok ? r.text() : Promise.reject(); }),
+      fetch(infoUrl).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+    ]).then(function (results) {
+      var subText  = results[0];
+      var subInfo  = results[1];
+      var lines    = parseVlessLines(subText);
+      /* skip branding line */
+      var realLines = lines.filter(function (l) { return l.indexOf(BRANDING_UUID) === -1; });
+      if (realLines.length === 0) { showState(errorState); return; }
+      initWithVless(realLines[0], subUrl, true, subInfo);
+    }).catch(function () { showState(errorState); });
+  }
+
+  /* ── parse subscription text ── */
+  function parseVlessLines(text) {
+    var t = (text || '').trim();
+    var decoded = t;
+    if (t.indexOf('vless://') === -1 && t.indexOf('vmess://') === -1) {
+      try { decoded = atob(t); } catch (e) { decoded = t; }
+    }
+    return decoded.split('\n').filter(function (l) { return l.trim().startsWith('vless://') || l.trim().startsWith('vmess://'); });
+  }
+
+  function b64urlDecodeOld(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    try {
+      return decodeURIComponent(atob(s).split('').map(function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+    } catch (e) { return null; }
+  }
+
+  /* ── main init ── */
+  function initWithVless(firstVless, subUrl, isSub, subInfo) {
+    var platform = detectPlatform();
+    var isTgIAB  = detectTelegramIAB();
+    var isIgIAB  = detectInstagramOrFB();
+
+    /* username from vless tag */
+    var username = 'друг';
     var hi = firstVless.lastIndexOf('#');
     if (hi > -1) {
       try {
         var tag = decodeURIComponent(firstVless.slice(hi + 1));
-        var m = tag.match(/toncaid[-_]VPN[-_](.+)/i);
-        if (m && m[1]) nm = m[1].trim();
+        var m = tag.match(/toncaid[-_\s]VPN[-_\s](.+)/i) || tag.match(/VPN[-_\s](.+)/i);
+        if (m && m[1]) username = m[1].trim();
       } catch (e) {}
     }
-    document.getElementById('userName').textContent = nm;
 
-    // Show subscription URLs in copy card
-    var copyCard = document.querySelector('.copy-card');
-    var copyLabel = copyCard.querySelector('.copy-label');
-    copyLabel.innerHTML = '<span class="block-num">3</span> SUBSCRIPTION URL';
-    var copyCode = document.getElementById('vlessText');
-    copyCode.textContent = rawSub;
-    copyCode.title = 'Subscription URL';
+    showState(readyState);
 
-    // Add Yandex backup hint
-    var yandexHint = document.createElement('div');
-    yandexHint.className = 'hint';
-    yandexHint.style.marginTop = '10px';
-    yandexHint.innerHTML = 
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
-      '<div><b>Резервная ссылка:</b><br><code style="font-size:11px;word-break:break-all;">' + yandexSub + '</code><br>' +
-      '<small>Через Yandex Translate — работает под белыми списками РФ</small></div>';
-    copyCard.appendChild(yandexHint);
-
-    setupEnv(firstVless);
-    renderChooser(rawSub, true);  // true = subscription mode
-    renderQR(rawSub);
-    setupCopyBtn(rawSub);
-  }
-
-  function setupEnv(vlessOrSub) {
-    var platform = detectPlatform();
-    var isTgIAB = detectTelegramIAB();
-    var isIgIAB = detectInstagramOrFB();
-    document.body.setAttribute('data-platform', platform);
-    if (isTgIAB) document.body.setAttribute('data-tg-iab', '1');
-
-
-    // IAB banner
+    renderSubCard(username, subInfo);
     setupIabBanner(isTgIAB, isIgIAB, platform);
+    renderAppGrid(isSub ? subUrl : firstVless, isSub, platform);
+    renderQR(isSub ? subUrl : firstVless);
+    renderCopySection(isSub ? subUrl : firstVless);
   }
 
-  function setupIabBanner(isTgIAB, isIgIAB, platform) {
-    var iabBanner = document.getElementById('iabBanner');
-    var iabBannerText = document.getElementById('iabBannerText');
-    var iabOpenBtn = document.getElementById('iabOpenBtn');
-    var iabCopyBtn = document.getElementById('iabCopyBtn');
+  /* ── subscription card ── */
+  function renderSubCard(username, info) {
+    $('userName').textContent = username;
 
-    if (!isTgIAB && !isIgIAB) return;
-    iabBanner.hidden = false;
-    var name = isTgIAB ? 'Telegram' : 'Instagram';
-    var howToOpen = '';
-    if (platform === 'ios') {
-      howToOpen = 'Нажми <b>⋯</b> вверху → <b>«Открыть в Safari»</b>';
-    } else if (platform === 'android') {
-      howToOpen = 'Нажми <b>⋮</b> вверху → <b>«Открыть в браузере»</b>';
+    if (!info) {
+      $('subType').textContent = 'Подписка';
+      $('subType').className = 'sub-type active';
+      $('subExpires').textContent = '';
+      return;
+    }
+
+    var daysLeft = info.days_left !== undefined ? info.days_left : null;
+    var expiresAt = info.expires_at || null;
+    var subType = info.subscription_type || 'paid';
+    var active = info.active !== false;
+
+    /* label */
+    var label = '';
+    var cls = '';
+    if (!active || (daysLeft !== null && daysLeft <= 0)) {
+      label = 'Подписка истекла'; cls = 'inactive';
+    } else if (subType === 'trial') {
+      label = 'Пробный период'; cls = 'trial';
     } else {
-      howToOpen = 'Открой эту ссылку во внешнем браузере (Chrome / Edge / Firefox)';
+      label = 'Активна'; cls = 'active';
     }
-    iabBannerText.innerHTML =
-      'Ты в браузере <b>' + name + '</b> — он блокирует переходы в VPN-приложения. ' +
-      howToOpen + ', потом жми «Импортировать». Или скопируй ссылку на эту страницу ↓';
+    var typeEl = $('subType');
+    typeEl.textContent = label;
+    typeEl.className = 'sub-type ' + cls;
 
-    iabOpenBtn.addEventListener('click', function () {
-      window.open(location.href, '_blank', 'noopener');
-    });
+    /* expiry date */
+    if (expiresAt) {
+      var d = new Date(expiresAt * 1000);
+      var opts = { day: 'numeric', month: 'long', year: 'numeric' };
+      $('subExpires').textContent = 'До ' + d.toLocaleDateString('ru-RU', opts);
+    }
 
-    iabCopyBtn.addEventListener('click', function () {
-      copyText(location.href, 'Ссылка на страницу скопирована');
-    });
+    /* ring */
+    var totalDays = subType === 'trial' ? 7 : 30;
+    if (info.total_days) totalDays = info.total_days;
+    var days = daysLeft !== null ? Math.max(0, daysLeft) : null;
+    $('daysNum').textContent = days !== null ? days : '∞';
+
+    if (days !== null) {
+      var pct = Math.min(1, days / totalDays);
+      var circumference = 2 * Math.PI * 27; /* r=27 → 169.6 */
+      var offset = circumference * (1 - pct);
+      var ringFg = $('ringFg');
+      ringFg.setAttribute('stroke-dashoffset', circumference);
+      ringFg.className = 'ring-fg ' + cls;
+      /* animate after paint */
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          ringFg.style.strokeDashoffset = offset;
+        });
+      });
+    }
   }
 
-  // ---------- helpers ----------
-  function copyText(text, okMsg) {
-    var done = function () { toast(okMsg || 'Скопировано'); if (navigator.vibrate) navigator.vibrate(15); };
-    var fail = function () { toast('Не удалось скопировать'); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(fbk);
-    } else { fbk(); }
-    function fbk() {
-      try {
-        var ta = document.createElement('textarea');
-        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
-        var ok = document.execCommand('copy'); document.body.removeChild(ta);
-        ok ? done() : fail();
-      } catch (e) { fail(); }
-    }
+  /* ── IAB banner ── */
+  function setupIabBanner(isTgIAB, isIgIAB, platform) {
+    if (!isTgIAB && !isIgIAB) return;
+    var banner = $('iabBanner');
+    banner.hidden = false;
+    var name = isTgIAB ? 'Telegram' : 'Instagram';
+    var tip = platform === 'ios'
+      ? 'Нажми <b>⋯</b> вверху → <b>«Открыть в Safari»</b>'
+      : platform === 'android'
+      ? 'Нажми <b>⋮</b> вверху → <b>«Открыть в браузере»</b>'
+      : 'Открой эту страницу во внешнем браузере';
+    $('iabText').innerHTML = 'Ты в браузере <b>' + name + '</b> — он блокирует переходы в VPN-приложения. ' + tip + ', затем снова выбери приложение.';
+    $('iabOpenBtn').onclick = function () { window.open(location.href, '_blank', 'noopener'); };
+    $('iabCopyBtn').onclick = function () { copyText(location.href, 'Ссылка скопирована'); };
   }
 
-  // ---------- deep links ----------
+  /* ── apps ── */
   var APPS = [
     {
-      id: 'hiddify',
-      name: 'Hiddify',
-      sub: 'iOS · Android · ПК',
-      platforms: ['ios', 'android', 'desktop'],
-      color: '#bf5af2',
-      icon: 'hiddify',
-      install: {
-        ios: 'https://apps.apple.com/app/hiddify-next/id6596777532',
-        android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
-        desktop: 'https://github.com/hiddify/hiddify-next/releases/latest'
-      },
-      scheme: function (url, isSub) {
-        return isSub 
-          ? 'hiddify://import/' + encodeURIComponent(url)
-          : 'hiddify://install-config?url=' + encodeURIComponent(url);
-      }
+      id: 'hiddify', name: 'Hiddify', platforms: ['ios','android','desktop'],
+      sub: 'iOS · Android · ПК', color: '#bf5af2',
+      install: { ios: 'https://apps.apple.com/app/hiddify-next/id6596777532', android: 'https://play.google.com/store/apps/details?id=app.hiddify.com', desktop: 'https://github.com/hiddify/hiddify-next/releases/latest' },
+      scheme: function (url, isSub) { return isSub ? 'hiddify://import/' + encodeURIComponent(url) : 'hiddify://install-config?url=' + encodeURIComponent(url); }
     },
     {
-      id: 'v2rayng',
-      name: 'v2rayNG',
-      sub: 'Android · надёжный',
-      platforms: ['android'],
-      color: '#30d158',
-      icon: 'android',
+      id: 'v2rayng', name: 'v2rayNG', platforms: ['android'],
+      sub: 'Android', color: '#30d158',
       install: { android: 'https://play.google.com/store/apps/details?id=com.v2ray.ang' },
-      scheme: function (url, isSub) {
-        return isSub
-          ? 'v2rayng://install-sub?url=' + encodeURIComponent(url)
-          : 'v2rayng://install-config?url=' + encodeURIComponent(url);
-      }
+      scheme: function (url, isSub) { return isSub ? 'v2rayng://install-sub?url=' + encodeURIComponent(url) : 'v2rayng://install-config?url=' + encodeURIComponent(url); }
     },
     {
-      id: 'karing',
-      name: 'Karing',
-      sub: 'iOS · Android · ПК',
-      platforms: ['ios', 'android', 'desktop'],
-      color: '#ff453a',
-      icon: 'karing',
-      install: {
-        ios: 'https://apps.apple.com/app/karing/id6472431552',
-        android: 'https://play.google.com/store/apps/details?id=com.nebula.karing',
-        desktop: 'https://github.com/KaringX/karing/releases/latest'
-      },
-      scheme: function (url, isSub) {
-        return 'karing://install-config?url=' + encodeURIComponent(url);
-      }
+      id: 'karing', name: 'Karing', platforms: ['ios','android','desktop'],
+      sub: 'iOS · Android · ПК', color: '#ff453a',
+      install: { ios: 'https://apps.apple.com/app/karing/id6472431552', android: 'https://play.google.com/store/apps/details?id=com.nebula.karing', desktop: 'https://github.com/KaringX/karing/releases/latest' },
+      scheme: function (url) { return 'karing://install-config?url=' + encodeURIComponent(url); }
     },
     {
-      id: 'streisand',
-      name: 'Streisand',
-      sub: 'iOS · популярный',
-      platforms: ['ios'],
-      color: '#5ac8fa',
-      icon: 'ios',
+      id: 'streisand', name: 'Streisand', platforms: ['ios'],
+      sub: 'iOS', color: '#5ac8fa',
       install: { ios: 'https://apps.apple.com/app/streisand/id6450534064' },
-      scheme: function (url, isSub) {
-        return isSub
-          ? 'streisand://import/' + encodeURIComponent(url)
-          : 'streisand://import/' + encodeURIComponent(url);
-      }
+      scheme: function (url) { return 'streisand://import/' + encodeURIComponent(url); }
     },
     {
-      id: 'happ',
-      name: 'Happ',
-      sub: 'iOS · Android',
-      platforms: ['ios', 'android'],
-      color: '#ff9f0a',
-      icon: 'happ',
-      install: {
-        ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215',
-        android: 'https://play.google.com/store/apps/details?id=com.happproxy'
-      },
-      scheme: function (url, isSub) {
-        return 'happ://add/' + encodeURIComponent(url);
-      }
+      id: 'happ', name: 'Happ', platforms: ['ios','android'],
+      sub: 'iOS · Android', color: '#ff9f0a',
+      install: { ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215', android: 'https://play.google.com/store/apps/details?id=com.happproxy' },
+      scheme: function (url) { return 'happ://add/' + encodeURIComponent(url); }
     },
     {
-      id: 'shadowrocket',
-      name: 'Shadowrocket',
-      sub: 'iOS · платный',
-      platforms: ['ios'],
-      color: '#64d2ff',
-      icon: 'ios',
+      id: 'shadowrocket', name: 'Shadowrocket', platforms: ['ios'],
+      sub: 'iOS · платный', color: '#64d2ff',
       install: { ios: 'https://apps.apple.com/app/shadowrocket/id932747118' },
-      scheme: function (url, isSub) {
-        return isSub
-          ? 'sub://' + b64urlEncode(url)
-          : 'sub://' + b64urlEncode(url);
-      }
+      scheme: function (url, isSub) { return 'sub://' + b64urlEncode(url); }
     },
     {
-      id: 'singbox',
-      name: 'sing-box',
-      sub: 'iOS · Android · ПК',
-      platforms: ['ios', 'android', 'desktop'],
-      color: '#4dffaa',
-      icon: 'generic',
-      install: {
-        ios: 'https://apps.apple.com/app/sing-box/id6451272673',
-        android: 'https://github.com/SagerNet/sing-box/releases/latest',
-        desktop: 'https://github.com/SagerNet/sing-box/releases/latest'
-      },
-      scheme: function (url, isSub) {
-        return isSub
-          ? 'sing-box://import-remote-profile?url=' + encodeURIComponent(url)
-          : url;
-      }
+      id: 'singbox', name: 'sing-box', platforms: ['ios','android','desktop'],
+      sub: 'iOS · Android · ПК', color: '#4dffaa',
+      install: { ios: 'https://apps.apple.com/app/sing-box/id6451272673', android: 'https://github.com/SagerNet/sing-box/releases/latest', desktop: 'https://github.com/SagerNet/sing-box/releases/latest' },
+      scheme: function (url, isSub) { return isSub ? 'sing-box://import-remote-profile?url=' + encodeURIComponent(url) : url; }
     }
   ];
 
-  function iconSvg(kind) {
-    if (kind === 'ios') {
-      return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>';
-    }
-    if (kind === 'android') {
-      return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.4.4 0 0 0-.7-.4l-1.86 3.22a11.78 11.78 0 0 0-9.76 0L5.26 5.9a.4.4 0 0 0-.7.4L6.4 9.48A11.34 11.34 0 0 0 1 18h22a11.34 11.34 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 7 15.25zm10 0A1.25 1.25 0 1 1 18.25 14 1.25 1.25 0 0 1 17 15.25z"/></svg>';
-    }
-    if (kind === 'happ') {
-      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/><path d="m9 12 2 2 4-4"/></svg>';
-    }
-    if (kind === 'hiddify') {
-      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
-    }
-    if (kind === 'karing') {
-      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v5c0 5 3.5 8.5 9 10 5.5-1.5 9-5 9-10V7l-9-5z"/><path d="M12 8v8M8 12h8"/></svg>';
-    }
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v14"/><path d="m6 10 6 6 6-6"/><path d="M5 22h14"/></svg>';
-  }
+  /* icon svgs */
+  var ICONS = {
+    hiddify: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>',
+    v2rayng: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.4.4 0 00-.7-.4l-1.86 3.22a11.78 11.78 0 00-9.76 0L5.26 5.9a.4.4 0 00-.7.4L6.4 9.48A11.34 11.34 0 001 18h22a11.34 11.34 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 111.25-1.25A1.25 1.25 0 017 15.25zm10 0A1.25 1.25 0 1118.25 14 1.25 1.25 0 0117 15.25z"/></svg>',
+    karing:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L3 7v5c0 5 3.5 8.5 9 10 5.5-1.5 9-5 9-10V7l-9-5z"/><path d="M12 8v8M8 12h8"/></svg>',
+    streisand:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>',
+    happ:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/><path d="m9 12 2 2 4-4"/></svg>',
+    shadowrocket: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>',
+    singbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>'
+  };
 
-  // ---------- render chooser ----------
-  function renderChooser(urlOrVless, isSub) {
-    var platform = detectPlatform();
-    var chooserGrid = document.getElementById('chooserGrid');
+  /* ── render app grid ── */
+  function renderAppGrid(url, isSub, platform) {
+    var grid = $('appGrid');
     var sorted = APPS.slice().sort(function (a, b) {
       var ap = a.platforms.indexOf(platform) > -1 ? 0 : 1;
       var bp = b.platforms.indexOf(platform) > -1 ? 0 : 1;
       return ap - bp;
     });
-    
-    chooserGrid.innerHTML = sorted.map(function(app) {
-      var installUrl = app.install ? (app.install[platform] || app.install.ios || app.install.android || app.install.desktop) : '';
-      var installBtn = installUrl
-        ? '<a class="ac-install" href="' + installUrl + '" target="_blank" rel="noopener" data-testid="install-' + app.id + '">Установить</a>'
+
+    grid.innerHTML = sorted.map(function (app) {
+      var installUrl = app.install
+        ? (app.install[platform] || app.install.ios || app.install.android || app.install.desktop || '')
+        : '';
+      var installHtml = installUrl
+        ? '<a class="app-install" href="' + installUrl + '" target="_blank" rel="noopener">⬇ Установить ' + app.name + '</a>'
         : '';
       return (
-        '<div class="ac" data-app="' + app.id + '" data-testid="app-import-' + app.id + '" style="--ac-color:' + app.color + '">' +
-          '<button class="ac-main" data-testid="app-import-btn-' + app.id + '">' +
-            '<div class="ac-icon">' + iconSvg(app.icon) + '</div>' +
-            '<div class="ac-body">' +
-              '<div class="ac-name">' + app.name + '</div>' +
-              '<div class="ac-sub">' + app.sub + '</div>' +
+        '<div class="app-card" data-id="' + app.id + '">' +
+          '<button class="app-main" type="button">' +
+            '<div class="app-icon" style="background:' + app.color + '1a;color:' + app.color + '">' +
+              (ICONS[app.id] || ICONS.hiddify) +
             '</div>' +
-            '<div class="ac-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg></div>' +
+            '<div class="app-info">' +
+              '<div class="app-name">' + app.name + '</div>' +
+              '<div class="app-platforms">' + app.sub + '</div>' +
+            '</div>' +
+            '<div class="app-arrow">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>' +
+            '</div>' +
           '</button>' +
-          installBtn +
+          installHtml +
         '</div>'
       );
     }).join('');
 
-    // attach handlers
-    chooserGrid.querySelectorAll('.ac').forEach(function (card) {
-      var id = card.getAttribute('data-app');
+    grid.querySelectorAll('.app-card').forEach(function (card) {
+      var id  = card.getAttribute('data-id');
       var app = APPS.find(function (a) { return a.id === id; });
-      var mainBtn = card.querySelector('.ac-main');
-      mainBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        attemptOpen(app, urlOrVless, isSub);
+      card.querySelector('.app-main').addEventListener('click', function () {
+        attemptOpen(app, url, isSub);
       });
     });
   }
 
-  function renderQR(urlOrVless) {
-    try {
-      /* global QRCode */
-      new QRCode(document.getElementById('qrcode'), {
-        text: urlOrVless,
-        width: 124, height: 124,
-        colorDark: '#001a10', colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M
-      });
-    } catch (e) { console.warn('QR error', e); }
-  }
-
-  function setupCopyBtn(urlOrVless) {
-    var copyBtn = document.getElementById('copyBtn');
-    var copyBtnText = document.getElementById('copyBtnText');
-    copyBtn.addEventListener('click', function () {
-      copyText(urlOrVless, 'Скопировано');
-      copyBtn.classList.add('ok');
-      copyBtnText.textContent = 'Скопировано ✓';
-      setTimeout(function () {
-        copyBtn.classList.remove('ok');
-        copyBtnText.textContent = 'Скопировать ключ';
-      }, 1800);
-    });
-    var codeEl = document.getElementById('vlessText');
-    codeEl.style.cursor = 'pointer';
-    codeEl.addEventListener('click', function () { copyBtn.click(); });
-  }
-
-  // ---------- attempt open ----------
-  function attemptOpen(app, urlOrVless, isSub) {
+  /* ── attempt deep link ── */
+  function attemptOpen(app, url, isSub) {
     if (navigator.vibrate) navigator.vibrate(15);
-    var url = app.scheme(urlOrVless, isSub);
-
     var isTgIAB = detectTelegramIAB();
     var isIgIAB = detectInstagramOrFB();
-    
-    if (isTgIAB || isIgIAB) {
-      showIabFallback(app, urlOrVless);
-      return;
-    }
+    if (isTgIAB || isIgIAB) { showFallback(app, url, true); return; }
 
+    var scheme = app.scheme(url, isSub);
     var hidden = false;
     var onVis = function () { if (document.hidden) hidden = true; };
     document.addEventListener('visibilitychange', onVis);
-
-    var start = Date.now();
-    try { window.location.href = url; } catch (err) {}
+    try { window.location.href = scheme; } catch (e) {}
 
     setTimeout(function () {
       document.removeEventListener('visibilitychange', onVis);
-      if (!hidden && !document.hidden && Date.now() - start > 1500) {
-        showAppFallback(app, urlOrVless);
-      }
+      if (!hidden && !document.hidden) { showFallback(app, url, false); }
     }, 1800);
   }
 
-  // ---------- fallback hints ----------
-  function showIabFallback(app, urlOrVless) {
-    var fallbackEl = document.getElementById('fallbackHint');
-    fallbackEl.hidden = false;
+  /* ── fallback ── */
+  function showFallback(app, url, isIab) {
+    var el = $('fallbackHint');
+    el.hidden = false;
     var isTgIAB = detectTelegramIAB();
-    var copyHint = isTgIAB
-      ? '1. Нажми <b>⋯</b> (или <b>⋮</b>) → <b>«Открыть в Safari/Chrome»</b><br>' +
-        '2. На открывшейся странице выбери <b>' + app.name + '</b> снова<br>' +
-        '3. Или скопируй ключ ниже и добавь его в приложении вручную'
-      : '1. Открой эту страницу <b>в обычном браузере</b> (Chrome / Safari)<br>' +
-        '2. Снова выбери <b>' + app.name + '</b>';
-    fallbackEl.innerHTML =
-      '<div class="fb-title">⚠️ ' + app.name + ' нельзя открыть из ' + (isTgIAB ? 'Telegram' : 'Instagram') + '-браузера</div>' +
-      '<div class="fb-text">' + copyHint + '</div>' +
-      '<div class="fb-actions">' +
-        '<button class="fb-btn" id="fbCopyKey" data-testid="fb-copy-key">📋 Скопировать ключ</button>' +
-        '<button class="fb-btn" id="fbCopyUrl" data-testid="fb-copy-url">🔗 Скопировать ссылку страницы</button>' +
+    var platform = detectPlatform();
+    var installUrl = app.install
+      ? (app.install[platform] || app.install.ios || app.install.android || app.install.desktop || '')
+      : '';
+
+    var bodyHtml = '';
+    if (isIab) {
+      bodyHtml = isTgIAB
+        ? '1. Нажми <b>⋯</b> (или <b>⋮</b>) → <b>«Открыть в Safari/Chrome»</b><br>2. На открывшейся странице выбери <b>' + app.name + '</b> снова<br>3. Или скопируй ссылку подписки и добавь вручную'
+        : '1. Открой страницу в <b>обычном браузере</b> (Chrome / Safari)<br>2. Снова выбери <b>' + app.name + '</b>';
+    } else {
+      bodyHtml = '1. Убедись что <b>' + app.name + '</b> установлен на устройстве<br>2. Или скопируй ссылку подписки (раздел 03) и добавь вручную через «Импорт из буфера»<br>3. Также можно отсканировать QR-код';
+    }
+
+    el.innerHTML =
+      '<div class="fallback-title">' + (isIab ? '⚠ ' : '') + app.name + (isIab ? ' нельзя открыть из этого браузера' : ' не открылся?') + '</div>' +
+      '<div class="fallback-text">' + bodyHtml + '</div>' +
+      '<div class="fallback-actions">' +
+        (installUrl ? '<a class="fb-btn" href="' + installUrl + '" target="_blank" rel="noopener">Установить</a>' : '') +
+        '<button class="fb-btn" id="fbCopyBtn">Скопировать ссылку</button>' +
+        '<button class="fb-btn" id="fbCloseBtn">Закрыть</button>' +
       '</div>';
-    fallbackEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    document.getElementById('fbCopyKey').addEventListener('click', function () { copyText(urlOrVless, 'Ключ скопирован'); });
-    document.getElementById('fbCopyUrl').addEventListener('click', function () { copyText(location.href, 'Ссылка скопирована'); });
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('fbCopyBtn').onclick = function () { copyText(url, 'Ссылка скопирована'); };
+    $('fbCloseBtn').onclick = function () { el.hidden = true; };
   }
 
-  function showAppFallback(app, urlOrVless) {
-    var fallbackEl = document.getElementById('fallbackHint');
-    fallbackEl.hidden = false;
-    var platform = detectPlatform();
-    var installUrl = app.install ? (app.install[platform] || '') : '';
-    var installLine = installUrl
-      ? '<a class="fb-btn" href="' + installUrl + '" target="_blank" rel="noopener" data-testid="fb-install">⬇️ Установить ' + app.name + '</a>'
-      : '';
-    fallbackEl.innerHTML =
-      '<div class="fb-title">' + app.name + ' не открылся?</div>' +
-      '<div class="fb-text">' +
-        '1. Убедись, что приложение <b>' + app.name + '</b> установлено.<br>' +
-        '2. Или скопируй ключ и добавь его в приложении вручную (<b>Импорт из буфера</b>).<br>' +
-        '3. Также можно отсканировать QR-код ниже.' +
-      '</div>' +
-      '<div class="fb-actions">' +
-        installLine +
-        '<button class="fb-btn" id="fbCopyKey">📋 Скопировать ключ</button>' +
-      '</div>';
-    fallbackEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    document.getElementById('fbCopyKey').addEventListener('click', function () { copyText(urlOrVless, 'Ключ скопирован'); });
+  /* ── QR ── */
+  function renderQR(url) {
+    try {
+      new QRCode($('qrcode'), {
+        text: url, width: 100, height: 100,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } catch (e) {}
   }
+
+  /* ── copy section ── */
+  function renderCopySection(url) {
+    $('subUrlText').textContent = url;
+    var btn = $('copyBtn');
+    var icon = $('copyIcon');
+    var checkSvg = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+    var copySvg = icon.outerHTML;
+    function doCopy() {
+      copyText(url, 'Ссылка скопирована');
+      btn.classList.add('ok');
+      icon.outerHTML = checkSvg;
+      setTimeout(function () {
+        btn.classList.remove('ok');
+        document.querySelector('.copy-btn svg').outerHTML = document.querySelector('.copy-icon-restore') ? '' : '';
+        btn.innerHTML = checkSvg.replace('<svg', '<svg id="copyIcon"');
+        setTimeout(function () {
+          btn.innerHTML = '<svg id="copyIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>';
+        }, 100);
+      }, 1800);
+    }
+    btn.onclick = doCopy;
+    $('subUrlText').onclick = doCopy;
+  }
+
 })();

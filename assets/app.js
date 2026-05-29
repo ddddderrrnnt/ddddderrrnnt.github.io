@@ -75,7 +75,13 @@
     fetch(subUrl)
       .then(function(r) { return r.text(); })
       .then(function(text) {
-        var lines = text.split('\n').filter(function(l) { return l.trim().startsWith('vless://'); });
+        var raw = text.trim();
+        // Support both base64-encoded subscriptions and plain-text vless:// lists
+        var decoded = raw;
+        if (raw.indexOf('vless://') === -1 && raw.indexOf('vmess://') === -1) {
+          try { decoded = atob(raw); } catch(e) { decoded = raw; }
+        }
+        var lines = decoded.split('\n').filter(function(l) { return l.trim().startsWith('vless://'); });
         if (lines.length > 0) {
           vless = lines[0].trim();
           renderNewFormat(vless, subUrl, yandexUrl);

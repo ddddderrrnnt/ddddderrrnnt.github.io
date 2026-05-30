@@ -381,6 +381,7 @@
   }
 
   function extractUsernameFromVless(vless) {
+    if (!vless || typeof vless !== 'string') return '';
     var hi = vless.lastIndexOf('#');
     if (hi < 0) return '';
     try {

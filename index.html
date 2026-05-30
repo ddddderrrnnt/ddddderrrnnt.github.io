@@ -15,13 +15,8 @@
 
 <main id="app">
 
-  <!-- LOADING (hidden by default — shown only briefly via JS if needed) -->
-  <div id="loadingState" class="state-center" hidden>
-    <div class="spinner"></div>
-  </div>
-
-  <!-- EMPTY (shown by default so non-JS users see something) -->
-  <div id="emptyState" class="state-center">
+  <!-- EMPTY: shown when no hash in URL -->
+  <div id="emptyState" class="state-center" hidden>
     <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
     <h1 class="empty-title">Персональная страница</h1>
     <p class="empty-desc">Ссылка выдаётся в боте после одобрения заявки.</p>
@@ -31,7 +26,7 @@
     </a>
   </div>
 
-  <!-- ERROR -->
+  <!-- ERROR: invalid / expired link -->
   <div id="errorState" class="state-center" hidden>
     <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
     <h1 class="empty-title">Ссылка не найдена</h1>
@@ -39,14 +34,13 @@
     <a href="https://t.me/toncaidVPN_bot" class="btn-primary">Перейти в бот</a>
   </div>
 
-  <!-- READY -->
+  <!-- READY: main content — shown immediately when hash present -->
   <div id="readyState" hidden>
 
-    <!-- HEADER -->
     <header class="header">
       <div class="logo">toncaid<span class="logo-slash">/</span>VPN</div>
       <a href="https://t.me/toncaidVPN_bot" class="header-tg" target="_blank" rel="noopener">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.41 13.948l-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.74.611z"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.41 13.948l-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.74.611z"/></svg>
         @toncaidVPN_bot
       </a>
     </header>
@@ -64,14 +58,14 @@
     </div>
 
     <!-- SUBSCRIPTION CARD -->
-    <div class="sub-card" id="subCard">
+    <div class="sub-card">
       <div class="sub-card-left">
         <div class="sub-greeting">Привет, <span id="userName" class="sub-username">—</span></div>
-        <div class="sub-type" id="subType">Загрузка…</div>
+        <div class="sub-type active" id="subType">Подписка активна</div>
         <div class="sub-expires" id="subExpires"></div>
       </div>
       <div class="sub-card-right">
-        <div class="days-ring" id="daysRing">
+        <div class="days-ring">
           <svg class="ring-svg" viewBox="0 0 64 64">
             <circle class="ring-bg" cx="32" cy="32" r="27" fill="none" stroke-width="5"/>
             <circle class="ring-fg" id="ringFg" cx="32" cy="32" r="27" fill="none" stroke-width="5"
@@ -86,7 +80,7 @@
       </div>
     </div>
 
-    <!-- IMPORT SECTION -->
+    <!-- IMPORT -->
     <section class="section">
       <div class="section-header">
         <div class="section-num">01</div>
@@ -99,7 +93,7 @@
       <div id="fallbackHint" class="fallback" hidden></div>
     </section>
 
-    <!-- QR SECTION -->
+    <!-- QR -->
     <section class="section">
       <div class="section-header">
         <div class="section-num">02</div>
@@ -114,7 +108,7 @@
       </div>
     </section>
 
-    <!-- COPY SECTION -->
+    <!-- COPY -->
     <section class="section">
       <div class="section-header">
         <div class="section-num">03</div>
@@ -124,9 +118,9 @@
         </div>
       </div>
       <div class="copy-wrap">
-        <code id="subUrlText" class="copy-code">—</code>
+        <code id="subUrlText" class="copy-code"></code>
         <button id="copyBtn" class="copy-btn" title="Скопировать">
-          <svg id="copyIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
         </button>
       </div>
     </section>
@@ -135,9 +129,7 @@
     <section class="section">
       <div class="section-header">
         <div class="section-num">?</div>
-        <div>
-          <div class="section-title">Не работает импорт?</div>
-        </div>
+        <div><div class="section-title">Не работает импорт?</div></div>
       </div>
       <ol class="help-list">
         <li>Убедись что приложение <strong>установлено</strong> — у каждой карточки есть кнопка «Установить»</li>
@@ -155,12 +147,13 @@
       </div>
     </footer>
 
-  </div>
+  </div><!-- /readyState -->
+
 </main>
 
 <div id="toast" class="toast"></div>
 
-<script src="/assets/qrcode.min.js" defer></script>
-<script src="/assets/app.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="/assets/app.js"></script>
 </body>
 </html>

@@ -61,11 +61,15 @@
     }
   }
 
-  /* ── определить hash ── */
-  var raw = (location.hash || '').slice(1).split('?')[0];
+  /* ── определить hash ──
+     Новый формат: ?h=<hash>  — работает в Telegram (query params не стрипаются)
+     Старый формат: #<hash>   — обратная совместимость для старых ссылок
+  */
+  var raw = new URLSearchParams(location.search).get('h') ||
+            (location.hash || '').slice(1).split('?')[0];
+  raw = (raw || '').trim();
 
   if (!raw) {
-    /* нет хэша — показать «пустую» страницу */
     $('emptyState').hidden = false;
     return;
   }

@@ -65,8 +65,23 @@
      Новый формат: ?h=<hash>  — работает в Telegram (query params не стрипаются)
      Старый формат: #<hash>   — обратная совместимость для старых ссылок
   */
-  var raw = new URLSearchParams(location.search).get('h') ||
-            (location.hash || '').slice(1).split('?')[0];
+  var raw = '';
+  try {
+    // Защита от undefined location в некоторых контекстах
+    if (typeof location !== 'undefined' && location.search) {
+      raw = new URLSearchParams(location.search).get('h') || '';
+    }
+    // Fallback to hash
+    if (!raw && typeof location !== 'undefined') {
+      var hash = location.hash || '';
+      if (hash) {
+        raw = hash.slice(1).split('?')[0];
+      }
+    }
+  } catch (e) {
+    console.error('Error reading URL params:', e);
+  }
+  
   raw = (raw || '').trim();
 
   if (!raw) {
